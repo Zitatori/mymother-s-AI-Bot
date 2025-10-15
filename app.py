@@ -1,16 +1,23 @@
-# app.py — Streamlit × static 画像完全対応版
-import os, base64
+# app.py — Streamlit × static 画像完全対応版（OpenAIなしでも動く）
+import os
+import base64
 import streamlit as st
-from dotenv import load_dotenv
-from openai import OpenAI
+
+# --- OpenAIをオプション扱い ---
+try:
+    from dotenv import load_dotenv
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
+    load_dotenv = lambda: None
 
 # ===== 基本設定 =====
 load_dotenv()
 MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 API_KEY = os.getenv("OPENAI_API_KEY")
 
-# API未設定でもUI確認できるように
-client = OpenAI(api_key=API_KEY) if API_KEY else None
+# APIキーがなければ None にして「ダミーモード」扱い
+client = OpenAI(api_key=API_KEY) if (API_KEY and OpenAI) else None
 
 st.set_page_config(
     page_title="占い×AI 女神メッセージBot by もりえみ",
@@ -18,7 +25,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# ===== 画像ローダ（static優先・複数ファイル名に対応） =====
+# ===== ファイル探索 & base64 =====
 def find_asset(candidates):
     for p in candidates:
         if os.path.exists(p):
@@ -29,7 +36,7 @@ def b64(path):
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode()
 
-# タイトル画像優先順（ご指定の titleq.png / title1.png / title.png）
+# タイトル画像優先順
 TITLE_IMG = find_asset([
     os.path.join("static", "titleq.png"),
     os.path.join("static", "title1.png"),
@@ -39,65 +46,43 @@ TITLE_IMG = find_asset([
 # 背景画像
 BG_IMG = find_asset([os.path.join("static", "bg.png")])
 
-# ===== 背景CSS（Streamlitの正しいターゲットに適用） =====
+# ===== 背景CSS =====
 def apply_background():
     bg_css = ""
     if BG_IMG:
-        bg_css = f"background-image: url('data:image/png;base64,{b64(BG_IMG)}');"  # base64埋め込みで確実反映
+        bg_css = f"background-image: url('data:image/png;base64,{b64(BG_IMG)}');"
     st.markdown(
         f"""
         <style>
-        /* アプリ全体の背景（body ではなく AppViewContainer を狙うのがコツ） */
         [data-testid="stAppViewContainer"] {{
             {bg_css}
             background-size: cover;
             background-position: center top;
             background-attachment: fixed;
         }}
-        /* ヘッダーを透明に */
         [data-testid="stHeader"] {{ background: transparent; }}
-        /* サイドバーがある場合も馴染ませる */
-        section[data-testid="stSidebar"] > div {{
-            background: rgba(255,255,255,0.65);
-            backdrop-filter: blur(8px);
-        }}
+        footer {{ visibility: hidden; }}
 
-        /* ===== 入力欄が黒くならないよう強制上書き ===== */
-        :root {{
-            --ink: #3b2a57;
-            --soft-bg: rgba(255,255,255,0.88);
-            --soft-border: #e6d7ff;
-        }}
-        /* 入力ボックスの外枠 */
+        /* 入力欄デザイン */
         .stChatInput > div {{
-            background: var(--soft-bg) !important;
-            border: 1px solid var(--soft-border) !important;
+            background: rgba(255,255,255,0.85) !important;
+            border: 1px solid #e3d4ff !important;
             border-radius: 14px !important;
-            box-shadow: 0 4px 16px rgba(107,78,161,0.08) !important;
         }}
-        /* 実際のテキストエリア（複数パターンに対応） */
-        .stChatInput textarea,
-        .stChatInput [contenteditable="true"],
-        div[data-baseweb="textarea"] textarea {{
+        .stChatInput textarea {{
             background: transparent !important;
-            color: var(--ink) !important;
-            caret-color: var(--ink) !important;
+            color: #3b2a57 !important;
         }}
         .stChatInput textarea::placeholder {{
-            color: #7b669b !important;
-            opacity: .8 !important;
+            color: #856fa5 !important;
         }}
-        /* 送信ボタン */
+        
+        
         button[kind="primary"] {{
             background: linear-gradient(90deg, #d9c3ff, #ffe99b) !important;
-            color: var(--ink) !important;
-            font-weight: 700 !important;
-            border: 1px solid var(--soft-border) !important;
-            border-radius: 12px !important;
-        }}
-        button[kind="primary"]:hover {{
-            transform: translateY(-1px) scale(1.02);
-            box-shadow: 0 0 10px rgba(200,170,255,.45);
+            color: #3b2a57 !important;
+            border-radius: 10px !important;
+            font-weight: 600 !important;
         }}
 
         /* 吹き出し */
@@ -105,17 +90,21 @@ def apply_background():
             text-align:right;
             background:#f2eaff;
             border:1px solid #dcd0ff;
-            border-radius:12px; padding:10px 14px; margin:8px 0; display:inline-block;
+            border-radius:12px;
+            padding:10px 14px;
+            margin:8px 0;
+            display:inline-block;
             color:#45335a;
         }}
         .bubble-bot {{
             text-align:left;
             background:#fff9f3;
             border:1px solid #f4dccf;
-            border-radius:12px; padding:10px 14px; margin:8px 0; display:inline-block;
+            border-radius:12px;
+            padding:10px 14px;
+            margin:8px 0;
+            display:inline-block;
         }}
-
-        /* 中央カードの半透明オーバーレイ */
         .glass {{
             background: rgba(255,255,255,0.65);
             backdrop-filter: blur(8px);
@@ -130,7 +119,141 @@ def apply_background():
 
 apply_background()
 
-# ===== タイトル（画像優先、なければテキスト） =====
+# ===== 追加のスタイル（明るい入力欄や全体トーン） =====
+st.markdown("""
+<style>
+[data-testid="stAppViewContainer"] * {
+  color: #2f2447 !important;
+}
+.stImage img {
+  border-radius: 18px !important;
+  box-shadow: 0 12px 40px rgba(120, 90, 160, 0.18) !important;
+  position: relative;
+  z-index: 3;
+}
+.bubble-bot {
+  background: rgba(255, 249, 243, 0.95) !important;
+  border: 1px solid #f0d8c9 !important;
+  color: #2f2447 !important;
+}
+.bubble-user {
+  background: rgba(242, 234, 255, 0.96) !important;
+  border: 1px solid #d6c8ff !important;
+  color: #2f2447 !important;
+}
+[data-testid="stBottomBlockContainer"] {
+  background: transparent !important;
+  padding-bottom: 12px !important;
+}
+.stChatInput > div {
+  background: rgba(255,255,255,0.95) !important;
+  border: 1px solid #e3d4ff !important;
+  border-radius: 14px !important;
+  box-shadow: 0 6px 22px rgba(110, 80, 160, 0.12) !important;
+}
+/* ===== 入力欄の文字を明るくして見えるように ===== */
+.stChatInput textarea,
+.stChatInput [contenteditable="true"],
+div[data-baseweb="textarea"] textarea {
+  color: #f7f3ff !important;        /* 明るいラベンダー白 */
+  caret-color: #f7f3ff !important;  /* カーソルも明るく */
+  background: transparent !important;
+  font-size: 16px !important;
+  font-weight: 500 !important;
+}
+
+/* プレースホルダー（入力前の薄文字） */
+.stChatInput textarea::placeholder {
+  color: #e5d8ff !important;        /* 淡い紫 */
+  opacity: 0.9 !important;
+}
+
+.stChatInput, .stChatInput > div,
+.bubble-user, .bubble-bot, .glass {
+  position: relative !important;
+  z-index: 10 !important;  /* 女神(4)より上 */
+}
+
+.glass {
+  background: rgba(255,255,255,0.78) !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ===== 女神画像（タイトル上配置版）＋ 吹き出し尻尾 =====
+st.markdown("""
+<style>
+/* --- 女神PNG：タイトルの上側に重ねる --- */
+#goddess-ornament {
+  position: fixed;
+  top: 400px;          
+  left: 40px;          
+  width: min(35vw, 900px);
+  max-width: 900px;
+  opacity: 0.95;
+  z-index: 4;          
+  pointer-events: none;
+  filter: drop-shadow(0 12px 40px rgba(120, 90, 160, .18));
+}
+
+/* モバイル調整 */
+@media (max-width: 640px) {
+  #goddess-ornament { top: 76px; left: 12px; width: 58vw; opacity: .9; }
+}
+
+/* 吹き出し尻尾 */
+.bubble-bot, .bubble-user { position: relative; }
+.bubble-bot::after {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 18px;
+  border-width: 8px;
+  border-style: solid;
+  border-color: transparent #f4dccf transparent transparent;
+}
+.bubble-bot::before {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 19px;
+  border-width: 7px;
+  border-style: solid;
+  border-color: transparent #fff9f3 transparent transparent;
+}
+.bubble-user::after {
+  content: "";
+  position: absolute;
+  right: -8px;
+  top: 18px;
+  border-width: 8px;
+  border-style: solid;
+  border-color: transparent transparent transparent #dcd0ff;
+}
+.bubble-user::before {
+  content: "";
+  position: absolute;
+  right: -6px;
+  top: 19px;
+  border-width: 7px;
+  border-style: solid;
+  border-color: transparent transparent transparent #f2eaff;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ===== 女神画像のbase64埋め込み表示 =====
+GODDESS_IMG = find_asset([os.path.join("static", "goddess.png")])
+if GODDESS_IMG:
+    goddess_b64 = b64(GODDESS_IMG)
+    st.markdown(
+        f"<img id='goddess-ornament' src='data:image/png;base64,{goddess_b64}' alt='goddess' />",
+        unsafe_allow_html=True
+    )
+else:
+    st.warning("⚠️ static/goddess.png が見つかりません。")
+
+# ===== タイトル =====
 if TITLE_IMG:
     st.image(TITLE_IMG, use_container_width=True)
 else:
@@ -140,42 +263,40 @@ else:
     )
 st.markdown("<div style='text-align:center;color:#4b306e;'>🪶 女神があなたに今必要なメッセージを届けます 🌙</div>", unsafe_allow_html=True)
 
-# ===== 会話セッション =====
+# ===== 会話管理 =====
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role":"assistant","content":"いま、少し切り替え期のエネルギーを感じます🌙 最近いちばん気になっているテーマは何ですか？（恋愛・仕事・お金など）"}
+        {"role":"assistant","content":"こんにちは🌸 あなたの中にある光を感じます。今いちばん気になっているテーマは何ですか？（恋愛・仕事・お金など）"}
     ]
-if "turn" not in st.session_state:
-    st.session_state.turn = 0
 
-# 中央にガラス風カードを作ってチャットを載せる
+# ===== チャットUI =====
 with st.container():
     st.markdown("<div class='glass'>", unsafe_allow_html=True)
 
-    # 履歴表示（アバター感は絵文字で）
     for m in st.session_state.messages:
         if m["role"] == "user":
             st.markdown(f"<div style='text-align:right;'>🧑‍💼<div class='bubble-user'>{m['content']}</div></div>", unsafe_allow_html=True)
         else:
             st.markdown(f"<div>🧚‍♀️<div class='bubble-bot'>{m['content']}</div></div>", unsafe_allow_html=True)
 
-    # 入力
-    prompt = st.chat_input("ここに入力してください…（例：仕事の流れを整えたい）")
+    prompt = st.chat_input("ここに入力してください…（例：流れを整えたい）")
     if prompt:
         st.session_state.messages.append({"role":"user","content":prompt})
-        st.session_state.turn += 1
 
-        # OpenAI呼び出し（未設定ならデモ文）
         if client is None:
-            reply = "（デモ応答）テーマは“自己価値の整え直し”。今週できる小さな一歩を一つだけ挙げてみてください🌙"
+            reply = "（デモ応答）運命はいつでもあなたの味方です🌙 小さな喜びを選ぶと、流れは自然と整っていきます。"
         else:
             try:
-                msgs = [{"role":"system","content":
-                         "あなたは『もりえみ』の世界観で話すAIです。やわらかく、断定しすぎず、気づきを促す。医療/法律の断言、恐怖訴求、過度な金銭約束は禁止。各返信は120字前後、絵文字は1つまで、最後に短い質問を1つ。"}] + st.session_state.messages
-                resp = client.chat.completions.create(model=MODEL, messages=msgs, temperature=0.7)
+                msgs = [{"role": "system", "content":
+                         "あなたは『もりえみ』の世界観で話すAIです。やわらかく、断定しすぎず、気づきを促す。医療・法律・恐怖訴求・金銭保証は禁止。120字前後、絵文字は1つまで。最後に短い質問を添える。"}] + st.session_state.messages
+                resp = client.chat.completions.create(
+                    model=MODEL,
+                    messages=msgs,
+                    temperature=0.7,
+                )
                 reply = resp.choices[0].message.content.strip()
             except Exception as e:
-                reply = f"⚠️ AI応答でエラー：{e}"
+                reply = f"⚠️ AI応答エラー：{e}"
 
         st.session_state.messages.append({"role":"assistant","content":reply})
         st.rerun()

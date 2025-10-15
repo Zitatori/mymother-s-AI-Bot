@@ -30,8 +30,8 @@ source .venv/bin/activate  # Windowsは .venv\Scripts\activate
 pip install -r requirements.txt
 
 # 3) 設定
-cp .env.example .env  # エディタで OPENAI_API_KEY を設定
-# PowerShellなどで: copy .env.example .env
+cp .env .env  # エディタで OPENAI_API_KEY を設定
+# PowerShellなどで: copy .env .env
 
 # 4) 起動
 export $(grep -v '^#' .env | xargs)  # Windowsは set コマンドで環境変数を設定
