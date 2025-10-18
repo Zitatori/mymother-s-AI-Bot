@@ -210,12 +210,14 @@ st.markdown("""
 .stChatInput textarea,
 .stChatInput [contenteditable="true"],
 div[data-baseweb="textarea"] textarea {
-  color: #f7f3ff !important;        /* 明るいラベンダー白 */
-  caret-color: #f7f3ff !important;  /* カーソルも明るく */
-  background: transparent !important;
+  color: #2f2447 !important;          /* PCの暗背景でも読める濃い紫グレー */
+  caret-color: #2f2447 !important;
+  background: rgba(255,255,255,0.85) !important;  /* 半透明の白背景を常に敷く */
   font-size: 16px !important;
   font-weight: 500 !important;
+  border-radius: 10px !important;
 }
+
 
 /* プレースホルダー（入力前の薄文字） */
 .stChatInput textarea::placeholder {
