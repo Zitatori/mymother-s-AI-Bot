@@ -2,6 +2,7 @@
 import os
 import base64
 import streamlit as st
+from pathlib import Path
 
 # --- OpenAIをオプション扱い ---
 try:
@@ -24,6 +25,60 @@ st.set_page_config(
     page_icon="🧚‍♀️",
     layout="centered"
 )
+# ===== 外部スタイル & few-shot ローダ（追加） =====
+
+APP_DIR = Path(__file__).parent
+
+def _pick_first_exist(cands):
+    for p in cands:
+        p = APP_DIR / p
+        if p.exists():
+            return p
+    return None
+
+def load_style():
+    # ファイル名ゆらぎ対応（半角/全角/先頭アンダーバー）
+    path = _pick_first_exist(["style_mother.txt", "_style_mother.txt", "＿style_mother.txt"])
+    if not path:
+        return ""  # 無くても動く
+    return path.read_text(encoding="utf-8").strip()
+
+def load_fewshot():
+    import json
+    shots = []
+    path = _pick_first_exist(["examples_mother.jsonl", "example_mother.jsonl"])
+    if not path:
+        return shots
+
+    buf = path.read_text(encoding="utf-8").strip()
+    # 誤って配列JSONで保存しても読めるように
+    if buf.startswith("["):
+        try:
+            arr = json.loads(buf)
+            for obj in arr:
+                role = obj.get("role"); content = (obj.get("content") or "").strip()
+                if role in ("user","assistant") and content:
+                    shots.append({"role": role, "content": content})
+        except Exception as e:
+            st.warning(f"{path.name} の解析に失敗: {e}")
+        return shots
+
+    # 正式: JSONL（1行=1JSON）
+    for lineno, line in enumerate(buf.splitlines(), 1):
+        s = line.strip()
+        if not s:
+            continue
+        try:
+            obj = json.loads(s)
+            role = obj.get("role"); content = (obj.get("content") or "").strip()
+            if role in ("user","assistant") and content:
+                shots.append({"role": role, "content": content})
+            else:
+                st.warning(f"{path.name}:{lineno} 不正（role/content）→スキップ")
+        except Exception as e:
+            st.error(f"{path.name}:{lineno} JSONエラー: {e}")
+    return shots
+
 
 # ===== ファイル探索 & base64 =====
 def find_asset(candidates):
@@ -266,7 +321,7 @@ st.markdown("<div style='text-align:center;color:#4b306e;'>🪶 女神があな�
 # ===== 会話管理 =====
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role":"assistant","content":"こんにちは🌸 あなたの中にある光を感じます。今いちばん気になっているテーマは何ですか？（恋愛・仕事・お金など）"}
+        {"role":"assistant","content":"おかえり。ずっと頑張ってたの、ちゃんとわかってるよ。よく我慢したね❤️どんなことがあったの？　話してくれていいんだよ。"}
     ]
 
 # ===== チャットUI =====
@@ -287,8 +342,17 @@ with st.container():
             reply = "（デモ応答）運命はいつでもあなたの味方です🌙 小さな喜びを選ぶと、流れは自然と整っていきます。"
         else:
             try:
-                msgs = [{"role": "system", "content":
-                         "あなたは『もりえみ』の世界観で話すAIです。やわらかく、断定しすぎず、気づきを促す。医療・法律・恐怖訴求・金銭保証は禁止。120字前後、絵文字は1つまで。最後に短い質問を添える。"}] + st.session_state.messages
+                # --- ここに追加 ---
+                STYLE_FILE = "style_mother.txt"
+                if os.path.exists(STYLE_FILE):
+                    with open(STYLE_FILE, "r", encoding="utf-8") as f:
+                        style_prompt = f.read().strip()
+                else:
+                    style_prompt = "あなたは優しく包み込むように話すAIです。"
+
+                # --- 既存のここを置き換える ---
+                msgs = [{"role": "system", "content": style_prompt}] + st.session_state.messages
+
                 resp = client.chat.completions.create(
                     model=MODEL,
                     messages=msgs,
