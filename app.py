@@ -318,7 +318,7 @@ else:
         "<h2 style='text-align:center;color:#6b4ea1;margin:10px 0 6px;'>占い×AI 女神メッセージBot by もりえみ</h2>",
         unsafe_allow_html=True
     )
-st.markdown("<div style='text-align:center;color:#4b306e;'>🪶 女神があなたに今必要なメッセージを届けます 🌙</div>", unsafe_allow_html=True)
+st.markdown("<div style='text-align:center;color:#4b306e;'>🪶 あなたに今必要なメッセージを届けます 🌙</div>", unsafe_allow_html=True)
 
 # ===== 会話管理 =====
 if "messages" not in st.session_state:
