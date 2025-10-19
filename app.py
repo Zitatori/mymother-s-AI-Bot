@@ -3,6 +3,8 @@ import os
 import base64
 import streamlit as st
 from pathlib import Path
+from summary_mailer import ensure_registration, maybe_send_summary_email, maybe_show_booking_cta,render_booking_cta_persistent
+
 
 # --- OpenAIをオプション扱い ---
 try:
@@ -25,6 +27,9 @@ st.set_page_config(
     page_icon="🧚‍♀️",
     layout="centered"
 )
+
+ensure_registration(st)  # ← 未登録ならフォームを出して停止
+
 # ===== 外部スタイル & few-shot ローダ（追加） =====
 
 APP_DIR = Path(__file__).parent
@@ -326,6 +331,10 @@ if "messages" not in st.session_state:
         {"role":"assistant","content":"どんなことでも相談してみて✨もりえみAIが答えるよ✨"}
     ]
 
+
+
+
+
 # ===== チャットUI =====
 with st.container():
     st.markdown("<div class='glass'>", unsafe_allow_html=True)
@@ -335,6 +344,8 @@ with st.container():
             st.markdown(f"<div style='text-align:right;'>🧑‍💼<div class='bubble-user'>{m['content']}</div></div>", unsafe_allow_html=True)
         else:
             st.markdown(f"<div>🧚‍♀️<div class='bubble-bot'>{m['content']}</div></div>", unsafe_allow_html=True)
+
+    render_booking_cta_persistent(st, threshold=10, embed_iframe=False, place="main")
 
     prompt = st.chat_input("ここに入力してください…（例：流れを整えたい）")
     if prompt:
@@ -365,6 +376,17 @@ with st.container():
                 reply = f"⚠️ AI応答エラー：{e}"
 
         st.session_state.messages.append({"role":"assistant","content":reply})
+        # 4) 10周目の予約CTA／メール送信（別ファイルのフック）
+        try:
+            from summary_mailer import maybe_show_booking_cta, maybe_send_summary_email
+
+            maybe_show_booking_cta(st, threshold=10, embed_iframe=False)
+            maybe_send_summary_email(st, threshold=10)
+        except Exception as _e:
+            # summary_mailer 未導入でも壊れないように
+            pass
+
+        # 5) 再描画
         st.rerun()
 
     st.markdown("</div>", unsafe_allow_html=True)
