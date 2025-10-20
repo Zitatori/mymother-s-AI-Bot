@@ -2,7 +2,9 @@
 import os
 import base64
 import streamlit as st
+import streamlit.components.v1 as components
 from pathlib import Path
+import time
 from summary_mailer import ensure_registration, maybe_send_summary_email, maybe_show_booking_cta, \
     render_booking_cta_persistent
 
@@ -13,6 +15,22 @@ try:
 except ImportError:
     OpenAI = None
     load_dotenv = lambda: None
+
+# --- 60秒ごとに軽くリロードして無操作チェックを回す ---
+components.html("""
+<script>
+  // 60秒ごとにページを優しく再読み込み（セッション維持）
+  setInterval(() => { location.reload(); }, 60000);
+</script>
+""", height=0)
+
+# --- 無操作タイムスタンプを初期化 ---
+if "last_activity_ts" not in st.session_state:
+    st.session_state["last_activity_ts"] = time.time()
+
+def touch():
+    """ユーザー操作があった瞬間に呼んで、最終操作時刻を更新"""
+    st.session_state["last_activity_ts"] = time.time()
 
 # ===== 基本設定 =====
 load_dotenv()
@@ -27,8 +45,18 @@ st.set_page_config(
     page_icon="🧚‍♀️",
     layout="centered"
 )
+# --- 離脱合図を受け取ったら要約メール送信 ---
+params = getattr(st, "query_params", None)
+if params is None:
+    params = st.experimental_get_query_params()
+
+if "__close" in params and not st.session_state.get("mail_sent"):
+    maybe_send_summary_email(st, threshold=0)  # 件数無視で送る
+    st.stop()
 
 ensure_registration(st)  # ← 未登録ならフォームを出して停止
+
+
 
 # ===== 外部スタイル & few-shot ローダ（追加） =====
 
@@ -352,8 +380,9 @@ with st.container():
 
     render_booking_cta_persistent(st, threshold=10, embed_iframe=False, place="main")
 
-    prompt = st.chat_input("ここに入力してください…（例：流れを整えたい）")
+    prompt = st.chat_input("ここに入力してください…（例：流れを整えたい）", key="main_chat_input")
     if prompt:
+        touch()
         st.session_state.messages.append({"role": "user", "content": prompt})
 
         if client is None:
@@ -395,3 +424,16 @@ with st.container():
         st.rerun()
 
     st.markdown("</div>", unsafe_allow_html=True)
+
+# ===== 無操作5分で自動送信 =====
+IDLE_SEC = 300  # 5分
+now = time.time()
+idle = now - st.session_state.get("last_activity_ts", now)
+
+if idle >= IDLE_SEC and not st.session_state.get("mail_sent"):
+    # 件数条件を無視して必ず送る
+    maybe_send_summary_email(st, threshold=0)
+    # 一度送ったら二重送信防止（関数内でも立ててるけど念のため）
+    st.session_state["mail_sent"] = True
+    # 送ったことを軽く表示（リロードで消えるので控えめに）
+    st.toast("要約メールを送信しました（無操作5分）", icon="📧")

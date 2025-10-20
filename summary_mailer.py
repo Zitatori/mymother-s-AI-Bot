@@ -93,7 +93,7 @@ def ensure_registration(st):
     st.stop()
 
 
-def maybe_send_summary_email(st, *, threshold:int=10):
+def maybe_send_summary_email(st, threshold:0):
     if not st.session_state.get("messages"):
         return
 
