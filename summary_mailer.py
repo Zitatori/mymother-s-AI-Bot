@@ -80,7 +80,7 @@ def ensure_registration(st):
                 # 初期メッセージが無ければ入れる
                 st.session_state.setdefault(
                     "messages",
-                    [{"role":"assistant","content":f"{nickname} さん、どんなことでも相談してみて✨"}]
+                    [{"role":"assistant","content":f"{nickname} さん、どんなことでも相談してみて✨もりえみAIが答えるよ✨"}]
                 )
                 # メール送信はするが、ユーザー側メールは不要に
                 st.session_state.setdefault("mail_sent", False)
@@ -181,7 +181,7 @@ def maybe_show_booking_cta(st, *, threshold:int=10, embed_iframe:bool=False):
                 st.info("予約URLが未設定です（.env の BOOKING_URL を設定してください）。")
 
 # --- 10発話以降は常に表示される予約CTA（UIのみ。messagesは触らない） ---
-def render_booking_cta_persistent(st, *, threshold:int=10, embed_iframe:bool=False, place:str="main"):
+def render_booking_cta_persistent(st, *, threshold:int=3, embed_iframe:bool=False, place:str="main"):
     """
     threshold 到達後は毎回レンダーで '置いておく' 予約CTA。
     - place="main"  : チャット欄の下に表示

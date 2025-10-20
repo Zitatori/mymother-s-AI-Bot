@@ -3,8 +3,8 @@ import os
 import base64
 import streamlit as st
 from pathlib import Path
-from summary_mailer import ensure_registration, maybe_send_summary_email, maybe_show_booking_cta,render_booking_cta_persistent
-
+from summary_mailer import ensure_registration, maybe_send_summary_email, maybe_show_booking_cta, \
+    render_booking_cta_persistent
 
 # --- OpenAIをオプション扱い ---
 try:
@@ -34,6 +34,7 @@ ensure_registration(st)  # ← 未登録ならフォームを出して停止
 
 APP_DIR = Path(__file__).parent
 
+
 def _pick_first_exist(cands):
     for p in cands:
         p = APP_DIR / p
@@ -41,12 +42,14 @@ def _pick_first_exist(cands):
             return p
     return None
 
+
 def load_style():
     # ファイル名ゆらぎ対応（半角/全角/先頭アンダーバー）
     path = _pick_first_exist(["style_mother.txt", "_style_mother.txt", "＿style_mother.txt"])
     if not path:
         return ""  # 無くても動く
     return path.read_text(encoding="utf-8").strip()
+
 
 def load_fewshot():
     import json
@@ -61,8 +64,9 @@ def load_fewshot():
         try:
             arr = json.loads(buf)
             for obj in arr:
-                role = obj.get("role"); content = (obj.get("content") or "").strip()
-                if role in ("user","assistant") and content:
+                role = obj.get("role");
+                content = (obj.get("content") or "").strip()
+                if role in ("user", "assistant") and content:
                     shots.append({"role": role, "content": content})
         except Exception as e:
             st.warning(f"{path.name} の解析に失敗: {e}")
@@ -75,8 +79,9 @@ def load_fewshot():
             continue
         try:
             obj = json.loads(s)
-            role = obj.get("role"); content = (obj.get("content") or "").strip()
-            if role in ("user","assistant") and content:
+            role = obj.get("role");
+            content = (obj.get("content") or "").strip()
+            if role in ("user", "assistant") and content:
                 shots.append({"role": role, "content": content})
             else:
                 st.warning(f"{path.name}:{lineno} 不正（role/content）→スキップ")
@@ -92,19 +97,21 @@ def find_asset(candidates):
             return p
     return None
 
+
 def b64(path):
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode()
 
 # タイトル画像優先順
 TITLE_IMG = find_asset([
-    os.path.join("static", "titleq.png"),
+    os.path.join("static", "title2.png"),
     os.path.join("static", "title1.png"),
     os.path.join("static", "title.png"),
 ])
 
 # 背景画像
 BG_IMG = find_asset([os.path.join("static", "bg.png")])
+
 
 # ===== 背景CSS =====
 def apply_background():
@@ -136,8 +143,8 @@ def apply_background():
         .stChatInput textarea::placeholder {{
             color: #856fa5 !important;
         }}
-        
-        
+
+
         button[kind="primary"] {{
             background: linear-gradient(90deg, #d9c3ff, #ffe99b) !important;
             color: #3b2a57 !important;
@@ -176,6 +183,7 @@ def apply_background():
         """,
         unsafe_allow_html=True
     )
+
 
 apply_background()
 
@@ -305,15 +313,15 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ===== 女神画像のbase64埋め込み表示 =====
-GODDESS_IMG = find_asset([os.path.join("static", "goddess.png")])
-if GODDESS_IMG:
-    goddess_b64 = b64(GODDESS_IMG)
-    st.markdown(
-        f"<img id='goddess-ornament' src='data:image/png;base64,{goddess_b64}' alt='goddess' />",
-        unsafe_allow_html=True
-    )
-else:
-    st.warning("⚠️ static/goddess.png が見つかりません。")
+# GODDESS_IMG = find_asset([os.path.join("static", "goddess.png")])
+# if GODDESS_IMG:
+#     goddess_b64 = b64(GODDESS_IMG)
+#     st.markdown(
+#         f"<img id='goddess-ornament' src='data:image/png;base64,{goddess_b64}' alt='goddess' />",
+#         unsafe_allow_html=True
+#     )
+# else:
+#     st.warning("⚠️ static/goddess.png が見つかりません。")
 
 # ===== タイトル =====
 if TITLE_IMG:
@@ -323,25 +331,22 @@ else:
         "<h2 style='text-align:center;color:#6b4ea1;margin:10px 0 6px;'>占い×AI 女神メッセージBot by もりえみ</h2>",
         unsafe_allow_html=True
     )
-st.markdown("<div style='text-align:center;color:#4b306e;'>🪶 あなたに今必要なメッセージを届けます 🌙</div>", unsafe_allow_html=True)
+st.markdown("<div style='text-align:center;color:#4b306e;'>🪶 あなたに今必要なメッセージを届けます 🌙</div>",
+            unsafe_allow_html=True)
 
 # ===== 会話管理 =====
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role":"assistant","content":"どんなことでも相談してみて✨もりえみAIが答えるよ✨"}
+        {"role": "assistant", "content": "どんなことでも相談してみて✨もりえみAIが答えるよ✨"}
     ]
-
-
-
-
 
 # ===== チャットUI =====
 with st.container():
-    st.markdown("<div class='glass'>", unsafe_allow_html=True)
 
     for m in st.session_state.messages:
         if m["role"] == "user":
-            st.markdown(f"<div style='text-align:right;'>🧑‍💼<div class='bubble-user'>{m['content']}</div></div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='text-align:right;'>🧑‍💼<div class='bubble-user'>{m['content']}</div></div>",
+                        unsafe_allow_html=True)
         else:
             st.markdown(f"<div>🧚‍♀️<div class='bubble-bot'>{m['content']}</div></div>", unsafe_allow_html=True)
 
@@ -349,7 +354,7 @@ with st.container():
 
     prompt = st.chat_input("ここに入力してください…（例：流れを整えたい）")
     if prompt:
-        st.session_state.messages.append({"role":"user","content":prompt})
+        st.session_state.messages.append({"role": "user", "content": prompt})
 
         if client is None:
             reply = "（デモ応答）運命はいつでもあなたの味方です🌙 小さな喜びを選ぶと、流れは自然と整っていきます。"
@@ -375,7 +380,7 @@ with st.container():
             except Exception as e:
                 reply = f"⚠️ AI応答エラー：{e}"
 
-        st.session_state.messages.append({"role":"assistant","content":reply})
+        st.session_state.messages.append({"role": "assistant", "content": reply})
         # 4) 10周目の予約CTA／メール送信（別ファイルのフック）
         try:
             from summary_mailer import maybe_show_booking_cta, maybe_send_summary_email
