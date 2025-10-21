@@ -424,6 +424,32 @@ with st.container():
         st.rerun()
 
     st.markdown("</div>", unsafe_allow_html=True)
+BOOKING_URL = os.getenv("BOOKING_URL")
+
+# 画像をbase64で埋め込む
+img_path = Path("static/reservation.png")
+with open(img_path, "rb") as f:
+    img_data = f.read()
+img_base64 = base64.b64encode(img_data).decode()
+
+# クリックでURLを開くHTML生成
+st.markdown(
+    f"""
+    <style>
+    .clickable {{
+        transition: transform 0.2s;
+    }}
+    .clickable:hover {{
+        transform: scale(1.05);
+    }}
+    </style>
+
+    <a href="{BOOKING_URL}" target="_blank">
+        <img class="clickable" src="data:image/png;base64,{img_base64}" width="300" style="cursor: pointer; border-radius: 12px;">
+    </a>
+    """,
+    unsafe_allow_html=True
+)
 
 # ===== 無操作5分で自動送信 =====
 IDLE_SEC = 300  # 5分
