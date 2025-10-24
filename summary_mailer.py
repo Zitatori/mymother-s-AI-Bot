@@ -1,6 +1,14 @@
 # summary_mailer.py
 import os, smtplib, textwrap, base64
 from email.mime.text import MIMEText
+from data_store import read_log
+from typing import Tuple
+from typing import Optional
+import streamlit as st
+
+
+
+
 
 # --- OpenAIは“あれば使う”オプション ---
 try:
@@ -15,7 +23,66 @@ RECIPIENT_EMAIL = os.getenv("RECIPIENT_EMAIL")        # 受信先（もりえみ
 BOOKING_URL = os.getenv("BOOKING_URL", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
 
+def _supabase_client():
+    # .env と Secrets の両対応
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except Exception:
+        pass
+    url = os.getenv("SUPABASE_URL") or st.secrets.get("SUPABASE", {}).get("URL")
+    key = os.getenv("SUPABASE_ANON_KEY") or st.secrets.get("SUPABASE", {}).get("ANON_KEY")
+    if not url or not key:
+        return None
+    from supabase import create_client
+    return create_client(url, key)
+
+def fetch_summaries_from_supabase(limit: int = 100, nickname: Optional[str] = None):
+    """Supabase から要約一覧を取得。失敗時は空配列を返す。"""
+    sb = _supabase_client()
+    if not sb:
+        st.warning("Supabase未設定（SUPABASE_URL / SUPABASE_ANON_KEY または Secrets）")
+        return []
+    try:
+        q = sb.table("summaries").select("*").order("created_at", desc=True).limit(limit)
+        if nickname:
+            q = q.eq("nickname", nickname)
+        res = q.execute()
+        return res.data or []
+    except Exception as e:
+        st.warning(f"Supabase 取得失敗: {e}")
+        return []
+
+def save_summary_to_supabase(*, nickname: str, turns: int, summary: str, transcript: str) -> bool:
+    """要約を Supabase に保存。成功 True / 失敗 False。"""
+    sb = _supabase_client()
+    if not sb:
+        st.error("Supabase未設定（SUPABASE_URL / SUPABASE_ANON_KEY または Secrets）")
+        return False
+    try:
+        sb.table("summaries").insert({
+            "nickname": nickname or "",
+            "turns": int(turns),
+            "summary": summary,
+            "transcript": transcript
+        }).execute()
+        return True
+    except Exception as e:
+        st.error(f"Supabase 保存失敗: {e}")
+        return False
+
+def summarize_and_store(messages, nickname: str, turns: int) -> str:
+    """
+    既存の _summarize(messages) を使って要約→Supabase 保存。
+    返り値は summary（UIで使いたい場合に備えて返す）。
+    """
+    summary, transcript = _summarize(messages)  # ←あなたの既存関数をそのまま利用
+    ok = save_summary_to_supabase(nickname=nickname, turns=turns,
+                                  summary=summary, transcript=transcript)
+    st.toast("Supabaseに保存しました" if ok else "Supabase保存に失敗", icon="✅" if ok else "⚠️")
+    return summary
 _client = None
 if OPENAI_API_KEY and OpenAI:
     _client = OpenAI(api_key=OPENAI_API_KEY)
@@ -70,26 +137,78 @@ def ensure_registration(st):
     if "nickname" in st.session_state:
         return
 
+    # --- 登録フォーム ---
     with st.form("register"):
         st.subheader("🧍最初にニックネームだけ教えてね")
         nickname = st.text_input("ニックネーム（必須）")
-        ok = st.form_submit_button("はじめる")
-        if ok:
-            if nickname.strip():
-                st.session_state["nickname"] = nickname.strip()
-                # 初期メッセージが無ければ入れる
-                st.session_state.setdefault(
-                    "messages",
-                    [{"role":"assistant","content":f"{nickname} さん、どんなことでも相談してみて✨もりえみAIが答えるよ✨"}]
-                )
-                # メール送信はするが、ユーザー側メールは不要に
-                st.session_state.setdefault("mail_sent", False)
-                # 登録後に即進める
-                st.rerun()
-            else:
-                st.warning("ニックネームを入れてください。")
+        submitted = st.form_submit_button("はじめる")  # ← フォーム用のフラグは submitted で固定
 
-    # フォーム表示中はここで停止（未登録時のみ）
+    # --- フォーム直下に“目立たない”管理者ログイン ---
+    with st.expander("管理者ログインはこちら", expanded=False):
+        admin_token = st.text_input("管理者トークン", type="password", key="adm_tok", placeholder="●●●●●")
+        if st.button("ログイン", key="adm_btn"):
+            # .envの値を優先
+            valid_token = ADMIN_TOKEN or (("ADMIN" in st.secrets) and st.secrets["ADMIN"].get("TOKEN"))
+            admin_ok = (admin_token == valid_token)
+            st.session_state["is_admin"] = bool(admin_ok)
+            st.success("管理者ログイン成功 ✅") if admin_ok else st.error("認証失敗 ❌")
+
+    # --- フォームの判定は管理者かどうかに関係なく実行する（←重要） ---
+    if submitted:
+        if nickname.strip():
+            st.session_state["nickname"] = nickname.strip()
+            # 初期メッセージが無ければ入れる
+            st.session_state.setdefault(
+                "messages",
+                [{"role": "assistant", "content": f"{nickname.strip()} さん、どんなことでも相談してみて✨もりえみAIが答えるよ✨"}]
+            )
+            st.session_state.setdefault("mail_sent", False)
+            st.rerun()  # 登録後に即進める
+        else:
+            st.warning("ニックネームを入れてください。")
+
+    # --- 管理者パネル（ログ閲覧/ダウンロード） ---
+    # --- 管理者パネル（要約一覧：Supabase） ---
+    if st.session_state.get("is_admin"):
+        st.divider()
+        st.subheader("📚 要約ログ（Supabase）")
+
+        import pandas as pd, io
+
+        col1, col2, col3 = st.columns([2, 1, 1])
+        with col1:
+            nick = st.text_input("ニックネームで絞り込み（任意）", key="adm_nick", placeholder="例: みすず")
+        with col2:
+            limit = st.number_input("取得件数", min_value=10, max_value=1000, value=100, step=10, key="adm_limit")
+        with col3:
+            refresh = st.button("最新を取得", key="adm_refresh", use_container_width=True)
+
+        if refresh or st.session_state.get("_adm_first", True):
+            rows = fetch_summaries_from_supabase(limit=int(limit), nickname=(nick or "").strip() or None)
+            st.session_state["_adm_rows"] = rows
+            st.session_state["_adm_first"] = False
+        else:
+            rows = st.session_state.get("_adm_rows", [])
+
+        st.caption(f"取得件数: {len(rows)} 件")
+
+        if not rows:
+            st.info("データがありません。送信後に要約保存が走っているか確認してください。")
+        else:
+            df = pd.DataFrame(rows)
+            cols = [c for c in ["created_at", "nickname", "turns", "summary", "transcript", "id"] if c in df.columns]
+            st.dataframe(df[cols], use_container_width=True, height=420)
+
+            buf = io.StringIO()
+            df[cols].to_csv(buf, index=False)
+            st.download_button(
+                "CSVをダウンロード",
+                buf.getvalue().encode("utf-8"),
+                file_name="summaries_admin.csv",
+                mime="text/csv"
+            )
+
+    # 未登録の間はここで止める
     st.stop()
 
 
@@ -218,3 +337,48 @@ def render_booking_cta_persistent(st, *, threshold:int=3, embed_iframe:bool=Fals
         """, height=740, scrolling=True)
     else:
         container.link_button("予約フォームを開く", BOOKING_URL, use_container_width=True)
+
+
+def _supabase_client():
+    # .env と Secrets の両対応
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except Exception:
+        pass
+    url = os.getenv("SUPABASE_URL") or st.secrets.get("SUPABASE", {}).get("URL")
+    key = os.getenv("SUPABASE_ANON_KEY") or st.secrets.get("SUPABASE", {}).get("ANON_KEY")
+    if not url or not key:
+        return None
+    from supabase import create_client
+    return create_client(url, key)
+
+def save_summary_to_supabase(*, nickname: str, turns: int, summary: str, transcript: str) -> bool:
+    sb = _supabase_client()
+    if not sb:
+        st.error("Supabase未設定（SUPABASE_URL / SUPABASE_ANON_KEY）")
+        return False
+    try:
+        sb.table("summaries").insert({
+            "nickname": nickname or "",
+            "turns": int(turns),
+            "summary": summary,
+            "transcript": transcript
+        }).execute()
+        return True
+    except Exception as e:
+        st.error(f"Supabase 保存失敗: {e}")
+        return False
+
+def summarize_and_store(messages, nickname: str, turns: int) -> str:
+    # 既存の _summarize(messages) を利用（要約, 全文）
+    summary, transcript = _summarize(messages)
+    ok = save_summary_to_supabase(
+        nickname=nickname, turns=turns,
+        summary=summary, transcript=transcript
+    )
+    if ok:
+        st.toast("Supabaseに保存しました", icon="✅")
+    else:
+        st.toast("Supabase保存に失敗", icon="⚠️")
+    return summary
