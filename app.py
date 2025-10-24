@@ -5,8 +5,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 from pathlib import Path
 import time
-from data_store import save_message, read_log
-from summary_mailer import ensure_registration, maybe_send_summary_email, maybe_show_booking_cta, \
+from summary_mailer import ensure_registration, maybe_show_booking_cta, \
     render_booking_cta_persistent, summarize_and_store
 
 
@@ -282,78 +281,7 @@ div[data-baseweb="textarea"] textarea {
 </style>
 """, unsafe_allow_html=True)
 
-# ===== 女神画像（タイトル上配置版）＋ 吹き出し尻尾 =====
-st.markdown("""
-<style>
-/* --- 女神PNG：タイトルの上側に重ねる --- */
-#goddess-ornament {
-  position: fixed;
-  top: 400px;          
-  left: 40px;          
-  width: min(35vw, 900px);
-  max-width: 900px;
-  opacity: 0.95;
-  z-index: 4;          
-  pointer-events: none;
-  filter: drop-shadow(0 12px 40px rgba(120, 90, 160, .18));
-}
 
-/* モバイル調整 */
-@media (max-width: 640px) {
-  #goddess-ornament { top: 76px; left: 12px; width: 58vw; opacity: .9; }
-}
-
-/* 吹き出し尻尾 */
-.bubble-bot, .bubble-user { position: relative; }
-.bubble-bot::after {
-  content: "";
-  position: absolute;
-  left: -8px;
-  top: 18px;
-  border-width: 8px;
-  border-style: solid;
-  border-color: transparent #f4dccf transparent transparent;
-}
-.bubble-bot::before {
-  content: "";
-  position: absolute;
-  left: -6px;
-  top: 19px;
-  border-width: 7px;
-  border-style: solid;
-  border-color: transparent #fff9f3 transparent transparent;
-}
-.bubble-user::after {
-  content: "";
-  position: absolute;
-  right: -8px;
-  top: 18px;
-  border-width: 8px;
-  border-style: solid;
-  border-color: transparent transparent transparent #dcd0ff;
-}
-.bubble-user::before {
-  content: "";
-  position: absolute;
-  right: -6px;
-  top: 19px;
-  border-width: 7px;
-  border-style: solid;
-  border-color: transparent transparent transparent #f2eaff;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# ===== 女神画像のbase64埋め込み表示 =====
-# GODDESS_IMG = find_asset([os.path.join("static", "goddess.png")])
-# if GODDESS_IMG:
-#     goddess_b64 = b64(GODDESS_IMG)
-#     st.markdown(
-#         f"<img id='goddess-ornament' src='data:image/png;base64,{goddess_b64}' alt='goddess' />",
-#         unsafe_allow_html=True
-#     )
-# else:
-#     st.warning("⚠️ static/goddess.png が見つかりません。")
 
 # ===== タイトル =====
 if TITLE_IMG:
@@ -452,96 +380,5 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-def admin_login_ui():
-    with st.expander("管理者ログインはこちら", expanded=False):
-        token = st.text_input("管理者トークン", type="password", key="adm_tok", placeholder="●●●●●")
-        if st.button("ログイン", key="adm_btn"):
-            ok = ("ADMIN" in st.secrets) and (token == st.secrets["ADMIN"]["TOKEN"])
-            st.session_state["is_admin"] = bool(ok)
-            st.success("管理者ログイン成功 ✅") if ok else st.error("認証失敗 ❌")
 
-def admin_panel():
-    st.subheader("📚 要約ログ（Supabase）")
 
-    from summary_mailer import fetch_summaries_from_supabase
-    import pandas as pd, io
-
-    col1, col2, col3 = st.columns([2,1,1])
-    with col1:
-        nick_filter = st.text_input("ニックネームで絞り込み（任意）", placeholder="例: みすず")
-    with col2:
-        limit = st.number_input("取得件数", min_value=10, max_value=1000, value=100, step=10)
-    with col3:
-        refresh = st.button("最新を取得", use_container_width=True)
-
-    if refresh or st.session_state.get("_admin_first", True):
-        rows = fetch_summaries_from_supabase(limit=int(limit), nickname=(nick_filter or "").strip() or None)
-        st.session_state["_admin_rows"] = rows
-        st.session_state["_admin_first"] = False
-    else:
-        rows = st.session_state.get("_admin_rows", [])
-
-    st.caption(f"取得件数: {len(rows)} 件")
-
-    if not rows:
-        st.info("データがありません。送信後に要約保存が走っているか確認してね。")
-        return
-
-    df = pd.DataFrame(rows)
-    cols = [c for c in ["created_at","nickname","turns","summary","transcript","id"] if c in df.columns]
-    st.dataframe(df[cols], use_container_width=True, height=420)
-
-    buf = io.StringIO()
-    df[cols].to_csv(buf, index=False)
-    st.download_button("CSVをダウンロード", buf.getvalue().encode("utf-8"),
-                       file_name="summaries_admin.csv", mime="text/csv")
-admin_login_ui()
-if st.session_state.get("is_admin"):
-    st.divider()
-    st.subheader("📚 要約ログ（Supabase）")
-
-    from summary_mailer import fetch_summaries_from_supabase
-    import pandas as pd, io
-
-    col1, col2, col3 = st.columns([2,1,1])
-    with col1:
-        nick_filter = st.text_input("ニックネームで絞り込み（任意）", key="adm_nick", placeholder="例: みすず")
-    with col2:
-        limit = st.number_input("取得件数", min_value=10, max_value=1000, value=50, step=10, key="adm_limit")
-    with col3:
-        refresh = st.button("最新を取得", key="adm_refresh", use_container_width=True)
-
-    if refresh or st.session_state.get("_admin_first", True):
-        rows = fetch_summaries_from_supabase(limit=int(limit), nickname=(nick_filter or "").strip() or None)
-        st.session_state["_admin_rows"] = rows
-        st.session_state["_admin_first"] = False
-    else:
-        rows = st.session_state.get("_admin_rows", [])
-
-    st.caption(f"取得件数: {len(rows)} 件")
-
-    if not rows:
-        st.info("データがありません。送信後に要約保存が走っているか確認してね。")
-    else:
-        df = pd.DataFrame(rows)
-        cols = [c for c in ["created_at","nickname","turns","summary","transcript","id"] if c in df.columns]
-        st.dataframe(df[cols], use_container_width=True, height=420)
-
-        buf = io.StringIO()
-        df[cols].to_csv(buf, index=False)
-        st.download_button("CSVをダウンロード", buf.getvalue().encode("utf-8"),
-                           file_name="summaries_admin.csv", mime="text/csv")
-
-    admin_panel()
-# # ===== 無操作5分で自動送信 =====
-# IDLE_SEC = 300  # 5分
-# now = time.time()
-# idle = now - st.session_state.get("last_activity_ts", now)
-#
-# if idle >= IDLE_SEC and not st.session_state.get("mail_sent"):
-#     # 件数条件を無視して必ず送る
-#     maybe_send_summary_email(st, threshold=0)
-#     # 一度送ったら二重送信防止（関数内でも立ててるけど念のため）
-#     st.session_state["mail_sent"] = True
-#     # 送ったことを軽く表示（リロードで消えるので控えめに）
-#     st.toast("要約メールを送信しました（無操作5分）", icon="📧")

@@ -1,14 +1,11 @@
 # summary_mailer.py
 import os, smtplib, textwrap, base64
 from email.mime.text import MIMEText
-from data_store import read_log
 from typing import Tuple
 from typing import Optional
 import streamlit as st
-
-
-
-
+import pandas as pd
+import io
 
 # --- OpenAIは“あれば使う”オプション ---
 try:
@@ -173,19 +170,12 @@ def ensure_registration(st):
         st.divider()
         st.subheader("📚 要約ログ（Supabase）")
 
-        import pandas as pd, io
-
-        col1, col2, col3 = st.columns([2, 1, 1])
-        with col1:
-            nick = st.text_input("ニックネームで絞り込み（任意）", key="adm_nick", placeholder="例: みすず")
-        with col2:
-            limit = st.number_input("取得件数", min_value=10, max_value=1000, value=100, step=10, key="adm_limit")
-        with col3:
-            refresh = st.button("最新を取得", key="adm_refresh", use_container_width=True)
+        refresh = st.button("最新を取得", key="adm_refresh", use_container_width=True)
 
         if refresh or st.session_state.get("_adm_first", True):
-            rows = fetch_summaries_from_supabase(limit=int(limit), nickname=(nick or "").strip() or None)
-            st.session_state["_adm_rows"] = rows
+            # 絞り込みや検索は不要なので固定で取得。件数は適宜調整（小規模想定で200）
+            rows = fetch_summaries_from_supabase(limit=200, nickname=None)
+            st.session_state["_adm_rows"] = rows or []
             st.session_state["_adm_first"] = False
         else:
             rows = st.session_state.get("_adm_rows", [])
@@ -196,9 +186,52 @@ def ensure_registration(st):
             st.info("データがありません。送信後に要約保存が走っているか確認してください。")
         else:
             df = pd.DataFrame(rows)
-            cols = [c for c in ["created_at", "nickname", "turns", "summary", "transcript", "id"] if c in df.columns]
-            st.dataframe(df[cols], use_container_width=True, height=420)
 
+            # ---- turns を「最新だけ」に正規化（古いターンは消す）----
+            def latest_turn(value):
+                """turnsが[1,2,3]なら3だけにする。JSON文字列も対応。"""
+                if isinstance(value, list):
+                    return value[-1] if value else None
+                if isinstance(value, str):
+                    try:
+                        obj = json.loads(value)
+                        if isinstance(obj, list) and len(obj) > 0:
+                            return obj[-1]  # 最新だけ残す
+                        return obj  # JSONでもリストじゃなければそのまま
+                    except Exception:
+                        return value
+                return value
+
+            if "turns" in df.columns:
+                # 最新ターンだけを残して上書き
+                df["turns"] = df["turns"].apply(latest_turn)
+
+            # ---- 表示する列（summary を大きく見せたい）----
+            cols = [c for c in ["nickname", "turns", "summary", "transcript"] if c in df.columns]
+            # DataFrame 表示（summary を大きく・折り返し）
+            st.dataframe(
+                df[cols],
+                use_container_width=True,
+                height=600,  # 表全体の高さを拡大
+                column_config={
+                    "summary": st.column_config.TextColumn(
+                        "summary",
+                        help="要約本文",
+                        width="large"  # ワイド表示
+                    ),
+                    "transcript": st.column_config.TextColumn(
+                        "transcript",
+                        help="全文文字起こし",
+                        width="medium"
+                    ),
+                    "turns": st.column_config.TextColumn(
+                        "turns (latest)",
+                        help="最新のターンのみ"
+                    ),
+                }
+            )
+
+            # ---- CSV ダウンロード（整形後の列で）----
             buf = io.StringIO()
             df[cols].to_csv(buf, index=False)
             st.download_button(
@@ -208,50 +241,10 @@ def ensure_registration(st):
                 mime="text/csv"
             )
 
-    # 未登録の間はここで止める
+    # 未登録の間はここで止める（ガードはそのまま）
     st.stop()
 
 
-def maybe_send_summary_email(st, threshold:0):
-    if not st.session_state.get("messages"):
-        return
-
-    user_cnt = sum(1 for m in st.session_state["messages"] if m["role"]=="user")
-    if user_cnt < threshold or st.session_state.get("mail_sent"):
-        return
-
-    if not RECIPIENT_EMAIL:
-        st.error("RECIPIENT_EMAIL が未設定のためメール送信できません。")
-        return
-
-    with st.spinner("要約してメール送信中…"):
-        summary, transcript = _summarize(st.session_state["messages"])
-        nickname = st.session_state.get('nickname','(無名)')
-        user_email = st.session_state.get('user_email')  # いまは無い想定
-
-        subject = f"[{nickname}] 会話要約＋ご予約のご案内"
-
-        email_line = f"\nメール: {user_email}\n" if user_email else ""
-        body = (
-            "受信者：もりえみ様\n\n"
-            "▼ユーザー情報\n"
-            f"ニックネーム: {nickname}\n"
-            f"{email_line}"
-            "\n▼要約\n"
-            f"{summary}\n\n"
-            "▼直近ログ（抜粋）\n"
-            f"{transcript}\n\n"
-            "▼予約フォーム\n"
-            f"{BOOKING_URL or '（未設定）'}\n\n"
-            "※このメールはシステムから自動送信されています。"
-        )
-
-        try:
-            _send_email(RECIPIENT_EMAIL, subject, body)
-            st.session_state["mail_sent"] = True
-            st.success("✅ 要約をメールで送信しました！")
-        except Exception as e:
-            st.error(f"メール送信に失敗：{e}")
 
 
 
