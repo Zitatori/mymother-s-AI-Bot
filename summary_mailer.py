@@ -168,68 +168,54 @@ def ensure_registration(st):
     # --- 管理者パネル（要約一覧：Supabase） ---
     if st.session_state.get("is_admin"):
         st.divider()
-        st.subheader("📚 要約ログ（Supabase）")
+        st.subheader("📚 要約ログ（管理者専用）")
 
+        nick = st.text_input("ニックネームで絞り込み（任意）", key="adm_nick", placeholder="例: みすず")
+        limit = st.number_input("取得件数", min_value=10, max_value=500, value=50, step=10, key="adm_limit")
         refresh = st.button("最新を取得", key="adm_refresh", use_container_width=True)
 
         if refresh or st.session_state.get("_adm_first", True):
-            # 絞り込みや検索は不要なので固定で取得。件数は適宜調整（小規模想定で200）
-            rows = fetch_summaries_from_supabase(limit=200, nickname=None)
-            st.session_state["_adm_rows"] = rows or []
+            rows = fetch_summaries_from_supabase(limit=int(limit), nickname=(nick or "").strip() or None)
+            st.session_state["_adm_rows"] = rows
             st.session_state["_adm_first"] = False
         else:
             rows = st.session_state.get("_adm_rows", [])
 
-        st.caption(f"取得件数: {len(rows)} 件")
-
+        # --- 💅 カード風UI ---
         if not rows:
-            st.info("データがありません。送信後に要約保存が走っているかgit 確認してください。")
+            st.info("データがありません。")
         else:
-            df = pd.DataFrame(rows)
+            for row in rows:
+                nickname = row.get("nickname", "(不明)")
+                created = row.get("created_at", "日時不明")
+                summary = row.get("summary", "(要約なし)")
+                transcript = row.get("transcript", "")
 
-            # ---- turns を「最新だけ」に正規化（古いターンは消す）----
-            def latest_turn(value):
-                """turnsが[1,2,3]なら3だけにする。JSON文字列も対応。"""
-                if isinstance(value, list):
-                    return value[-1] if value else None
-                if isinstance(value, str):
-                    try:
-                        obj = json.loads(value)
-                        if isinstance(obj, list) and len(obj) > 0:
-                            return obj[-1]  # 最新だけ残す
-                        return obj  # JSONでもリストじゃなければそのまま
-                    except Exception:
-                        return value
-                return value
+                st.markdown(
+                    f"""
+                    <div style="
+                        background:rgba(255,255,255,0.8);
+                        border:1px solid #ddd;
+                        border-radius:14px;
+                        padding:14px 20px;
+                        margin:10px 0;
+                        box-shadow:0 4px 12px rgba(160,130,255,0.12);
+                    ">
+                        <h4>👤 {nickname}</h4>
+                        <p style="font-size:13px;color:#666;">🕒 {created}</p>
+                        <p style="white-space:pre-wrap;">📝 {summary}</p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
 
-            if "turns" in df.columns:
-                # 最新ターンだけを残して上書き
-                df["turns"] = df["turns"].apply(latest_turn)
+                with st.expander("💬 会話ログを見る"):
+                    st.text_area("全文", transcript or "(なし)", height=200)
 
-            # ---- 表示する列（summary を大きく見せたい）----
-            cols = [c for c in ["nickname", "turns", "summary", "transcript"] if c in df.columns]
-            # DataFrame 表示（summary を大きく・折り返し）
-            st.dataframe(
-                df[cols],
-                use_container_width=True,
-                height=600,  # 表全体の高さを拡大
-                column_config={
-                    "summary": st.column_config.TextColumn(
-                        "summary",
-                        help="要約本文",
-                        width="large"  # ワイド表示
-                    ),
-                    "transcript": st.column_config.TextColumn(
-                        "transcript",
-                        help="全文文字起こし",
-                        width="medium"
-                    ),
-                    "turns": st.column_config.TextColumn(
-                        "turns (latest)",
-                        help="最新のターンのみ"
-                    ),
-                }
-            )
+                if st.button(f"🗑️ この要約を削除", key=f"del_{row['id']}"):
+                    delete_summary_from_supabase(row['id'])
+                    st.success(f"{nickname} のログを削除しました ✅")
+                    st.rerun()
 
             # ---- CSV ダウンロード（整形後の列で）----
             buf = io.StringIO()
