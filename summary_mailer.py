@@ -183,7 +183,7 @@ def ensure_registration(st):
         st.caption(f"取得件数: {len(rows)} 件")
 
         if not rows:
-            st.info("データがありません。送信後に要約保存が走っているか確認してください。")
+            st.info("データがありません。送信後に要約保存が走っているかgit 確認してください。")
         else:
             df = pd.DataFrame(rows)
 
