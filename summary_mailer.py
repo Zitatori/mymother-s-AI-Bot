@@ -5,7 +5,8 @@ from typing import Tuple
 from typing import Optional
 import streamlit as st
 import pandas as pd
-import io
+from datetime import datetime
+
 
 # --- OpenAIは“あれば使う”オプション ---
 try:
@@ -21,6 +22,8 @@ BOOKING_URL = os.getenv("BOOKING_URL", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
+
+
 
 def _supabase_client():
     # .env と Secrets の両対応
@@ -51,6 +54,20 @@ def fetch_summaries_from_supabase(limit: int = 100, nickname: Optional[str] = No
     except Exception as e:
         st.warning(f"Supabase 取得失敗: {e}")
         return []
+
+
+def delete_summary_from_supabase(summary_id: str):
+    sb = _supabase_client()
+    if not sb:
+        st.error("Supabase未設定（SUPABASE_URL / SUPABASE_ANON_KEY または Secrets）")
+        return False
+    try:
+        sb.table("summaries").delete().eq("id", summary_id).execute()
+        return True
+    except Exception as e:
+        st.error(f"削除失敗: {e}")
+        return False
+
 
 def save_summary_to_supabase(*, nickname: str, turns: int, summary: str, transcript: str) -> bool:
     """要約を Supabase に保存。成功 True / 失敗 False。"""
@@ -84,16 +101,6 @@ _client = None
 if OPENAI_API_KEY and OpenAI:
     _client = OpenAI(api_key=OPENAI_API_KEY)
 
-def _send_email(to, subject, body):
-    if not (GMAIL_FROM and GMAIL_APP_PASSWORD):
-        raise RuntimeError("GMAIL_FROM / GMAIL_APP_PASSWORD が未設定です。")
-    msg = MIMEText(body, _charset="utf-8")
-    msg["Subject"] = subject
-    msg["From"] = GMAIL_FROM
-    msg["To"] = to
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-        smtp.login(GMAIL_FROM, GMAIL_APP_PASSWORD)
-        smtp.sendmail(GMAIL_FROM, [to], msg.as_string())
 
 def _summarize(messages):
     """st.session_state.messages を要約（OpenAIが無ければ簡易）。"""

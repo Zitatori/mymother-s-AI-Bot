@@ -18,19 +18,12 @@ except ImportError:
     load_dotenv = lambda: None
 
 
-# --- 60秒ごとに軽くリロードして無操作チェックを回す ---
-components.html("""
-<script>
-  // 60秒ごとにページを優しく再読み込み（セッション維持）
-  setInterval(() => { location.reload(); }, 60000);
-</script>
-""", height=0)
 
 # --- 無操作タイムスタンプを初期化 ---
 if "last_activity_ts" not in st.session_state:
     st.session_state["last_activity_ts"] = time.time()
 
-def touch():
+def touch():#なんかこれがないとチャットが動かない
     """ユーザー操作があった瞬間に呼んで、最終操作時刻を更新"""
     st.session_state["last_activity_ts"] = time.time()
 
@@ -53,9 +46,7 @@ params = getattr(st, "query_params", None)
 if params is None:
     params = st.experimental_get_query_params()
 
-if "__close" in params and not st.session_state.get("mail_sent"):
-    maybe_send_summary_email(st, threshold=0)  # 件数無視で送る
-    st.stop()
+
 
 ensure_registration(st)  # ← 未登録ならフォームを出して停止
 
