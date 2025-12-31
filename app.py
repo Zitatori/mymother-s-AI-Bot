@@ -5,8 +5,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 from pathlib import Path
 import time
-from summary_mailer import ensure_registration, maybe_show_booking_cta, \
-    render_booking_cta_persistent, summarize_and_store
+from summary_mailer import ensure_registration, render_booking_cta_persistent
 
 
 # --- OpenAIをオプション扱い ---
@@ -341,7 +340,6 @@ with st.container():
         summary = summarize_and_store(st.session_state.messages, nickname, turns)
 
         # デバッグ：保存が呼ばれたことを画面に小さく出す
-        st.toast("要約保存を実行しました", icon="🗂️")
 
         st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)

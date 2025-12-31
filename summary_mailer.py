@@ -180,6 +180,14 @@ def ensure_registration(st):
         nick = st.text_input("ニックネームで絞り込み（任意）", key="adm_nick", placeholder="例: みすず")
         limit = st.number_input("取得件数", min_value=10, max_value=500, value=50, step=10, key="adm_limit")
         refresh = st.button("最新を取得", key="adm_refresh", use_container_width=True)
+        if (nick or "").strip():
+            # このニックでまだ自動要約を走らせていなければ実行
+            done_key = st.session_state.get("_adm_autosum_done_for")
+            if done_key != nick.strip():
+                st.info(f"🔄 {nick.strip()} の要約を作成しています…")
+                admin_summarize_user(nickname=nick.strip(), only_since_last=True)
+                st.session_state["_adm_autosum_done_for"] = nick.strip()
+                st.success(f"{nick.strip()} の最新要約を作成しました ✅")
 
         if refresh or st.session_state.get("_adm_first", True):
             rows = fetch_summaries_from_supabase(limit=int(limit), nickname=(nick or "").strip() or None)
