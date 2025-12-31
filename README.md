@@ -13,7 +13,7 @@
 
 | UIイメージ |
 |:--:|
-| ![App Screenshot](emi.png) |
+| ![App Screenshot](emi1.png) |
 
 > 🎨 テーマカラー：白 × ラベンダー × 金  
 > 花モチーフ（ピオニー・桜・胡蝶蘭）をイメージ。
