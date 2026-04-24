@@ -333,13 +333,13 @@ with st.container():
 
         st.session_state.messages.append({"role": "assistant", "content": reply})
         # ✅ 要約→Supabase保存（必ずこの位置）
-        from summary_mailer import summarize_and_store
-
-        nickname = st.session_state.get("nickname") or st.session_state.get("user_id") or ""
-        turns = sum(1 for m in st.session_state.messages if m["role"] == "user")
-        summary = summarize_and_store(st.session_state.messages, nickname, turns)
-
-        # デバッグ：保存が呼ばれたことを画面に小さく出す
+        # from summary_mailer import summarize_and_store
+        #
+        # nickname = st.session_state.get("nickname") or st.session_state.get("user_id") or ""
+        # turns = sum(1 for m in st.session_state.messages if m["role"] == "user")
+        # summary = summarize_and_store(st.session_state.messages, nickname, turns)
+        #
+        # # デバッグ：保存が呼ばれたことを画面に小さく出す
 
         st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
