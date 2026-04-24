@@ -148,14 +148,14 @@ def ensure_registration(st):
         submitted = st.form_submit_button("はじめる")  # ← フォーム用のフラグは submitted で固定
 
     # --- フォーム直下に“目立たない”管理者ログイン ---
-    with st.expander("管理者ログインはこちら", expanded=False):
-        admin_token = st.text_input("管理者トークン", type="password", key="adm_tok", placeholder="●●●●●")
-        if st.button("ログイン", key="adm_btn"):
-            # .envの値を優先
-            valid_token = ADMIN_TOKEN or (("ADMIN" in st.secrets) and st.secrets["ADMIN"].get("TOKEN"))
-            admin_ok = (admin_token == valid_token)
-            st.session_state["is_admin"] = bool(admin_ok)
-            st.success("管理者ログイン成功 ✅") if admin_ok else st.error("認証失敗 ❌")
+    # with st.expander("管理者ログインはこちら", expanded=False):
+    #     admin_token = st.text_input("管理者トークン", type="password", key="adm_tok", placeholder="●●●●●")
+    #     if st.button("ログイン", key="adm_btn"):
+    #         # .envの値を優先
+    #         valid_token = ADMIN_TOKEN or (("ADMIN" in st.secrets) and st.secrets["ADMIN"].get("TOKEN"))
+    #         admin_ok = (admin_token == valid_token)
+    #         st.session_state["is_admin"] = bool(admin_ok)
+    #         st.success("管理者ログイン成功 ✅") if admin_ok else st.error("認証失敗 ❌")
 
     # --- フォームの判定は管理者かどうかに関係なく実行する（←重要） ---
     if submitted:

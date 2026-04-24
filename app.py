@@ -125,6 +125,7 @@ def b64(path):
 
 # タイトル画像優先順
 TITLE_IMG = find_asset([
+    os.path.join("static", "title3.png"),
     os.path.join("static", "title2.png"),
     os.path.join("static", "title1.png"),
     os.path.join("static", "title.png"),
@@ -200,6 +201,7 @@ def apply_background():
             box-shadow: 0 8px 30px rgba(160,130,255,.18);
             padding: 14px 18px;
         }}
+        
         </style>
         """,
         unsafe_allow_html=True
@@ -268,6 +270,29 @@ div[data-baseweb="textarea"] textarea {
 .glass {
   background: rgba(255,255,255,0.78) !important;
 }
+[data-testid="stAppViewContainer"] .block-container {
+  background: rgba(255, 248, 242, 0.45) !important;
+  backdrop-filter: blur(4px) !important;
+  border-radius: 28px !important;
+  padding: 34px 30px 34px 30px !important;
+  max-width: 800px !important;
+  margin-top: 36px !important;
+  box-shadow: 0 18px 50px rgba(120, 80, 60, 0.10) !important;
+}
+}
+.booking-cta {
+  display: inline-block;
+  background: rgba(255, 250, 248, 0.88);
+  color: #7a5b6f !important;
+  border: 1px solid rgba(220, 180, 190, 0.55);
+  border-radius: 999px;
+  padding: 14px 28px;
+  font-size: 22px;
+  font-weight: 600;
+  box-shadow: 0 10px 28px rgba(130, 90, 110, 0.13);
+  text-decoration: none !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -344,30 +369,15 @@ with st.container():
         st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
 BOOKING_URL = os.getenv("BOOKING_URL")
-
 # 画像をbase64で埋め込む
-img_path = Path("static/reservation.png")
-with open(img_path, "rb") as f:
-    img_data = f.read()
-img_base64 = base64.b64encode(img_data).decode()
+
 
 # クリックでURLを開くHTML生成
 st.markdown(
     f"""
-    <style>
-    .clickable {{
-        transition: transform 0.2s;
-    }}
-    .clickable:hover {{
-        transform: scale(1.05);
-    }}
-    </style>
-
-    <a href="{BOOKING_URL}" target="_blank">
-        <img class="clickable" src="data:image/png;base64,{img_base64}" width="300" style="cursor: pointer; border-radius: 12px;">
+    <a class="booking-cta" href="{BOOKING_URL}" target="_blank">
+        🌸 ご予約はこちら ✨
     </a>
     """,
     unsafe_allow_html=True
 )
-
-
