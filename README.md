@@ -42,7 +42,7 @@ this is a **conversation-first Web MVP** focused on tone, pacing, and emotional 
 
 | UI Preview |
 |:--:|
-| ![App Screenshot](emi1.png) |
+| ![App Screenshot](emi2.png) |
 
 > 🎨 Theme colors: White × Lavender × Gold  
 > 🌸 Floral inspiration: Peony / Sakura / Phalaenopsis  
